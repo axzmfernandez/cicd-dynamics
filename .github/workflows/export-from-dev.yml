@@ -1,0 +1,67 @@
+name: export-from-dev
+
+# Exporta la solución desde DEV, la desempaqueta (unmanaged + managed) y abre una PR.
+on:
+  workflow_dispatch:
+    inputs:
+      solution_name:
+        description: Nombre único de la solución
+        required: true
+        default: AXZ_Core
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  export:
+    runs-on: windows-latest
+    environment: dev
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/powerplatform-actions/actions-install@v1
+
+      - name: Exportar unmanaged
+        uses: microsoft/powerplatform-actions/export-solution@v1
+        with:
+          environment-url: ${{ secrets.ENV_URL }}
+          app-id: ${{ secrets.CLIENT_ID }}
+          client-secret: ${{ secrets.CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          solution-name: ${{ inputs.solution_name }}
+          solution-output-file: out/${{ inputs.solution_name }}.zip
+          managed: false
+
+      - name: Exportar managed
+        uses: microsoft/powerplatform-actions/export-solution@v1
+        with:
+          environment-url: ${{ secrets.ENV_URL }}
+          app-id: ${{ secrets.CLIENT_ID }}
+          client-secret: ${{ secrets.CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          solution-name: ${{ inputs.solution_name }}
+          solution-output-file: out/${{ inputs.solution_name }}_managed.zip
+          managed: true
+
+      - name: Desempaquetar (Both)
+        uses: microsoft/powerplatform-actions/unpack-solution@v1
+        with:
+          solution-file: out/${{ inputs.solution_name }}.zip
+          solution-folder: solutions/${{ inputs.solution_name }}/src
+          solution-type: Both
+          overwrite-files: true
+
+      - name: Commit, push y PR
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          branch="export/${{ inputs.solution_name }}-${{ github.run_number }}"
+          git config user.name "github-actions"
+          git config user.email "github-actions@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add solutions
+          git commit -m "Export ${{ inputs.solution_name }} desde DEV" || { echo "Sin cambios"; exit 0; }
+          git push origin "$branch"
+          gh pr create --title "Export ${{ inputs.solution_name }} desde DEV" --body "Exportación automática desde DEV." --base main --head "$branch"

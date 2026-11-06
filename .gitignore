@@ -1,0 +1,8 @@
+out/
+bin/
+obj/
+.vs/
+*.user
+*.suo
+# La clave de firma del plugin se versiona a propósito (identidad del ensamblado, no es un secreto)
+!plugins/Axz.Plugins/axazure.snk

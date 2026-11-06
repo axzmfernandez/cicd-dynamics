@@ -1,0 +1,6 @@
+{
+  "EnvironmentVariables": [
+    { "SchemaName": "axz_apimbaseurl", "Value": "https://apim-prod.ejemplo.com" }
+  ],
+  "ConnectionReferences": []
+}

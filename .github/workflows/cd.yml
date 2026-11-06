@@ -1,0 +1,92 @@
+name: cd
+
+# Build una vez, despliega el mismo artefacto: QA automático, PROD con aprobación del environment.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  SOLUTION_NAME: AXZ_Core
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.x
+
+      - name: Compilar plugin
+        run: dotnet build plugins/Axz.Plugins -c Release
+
+      - name: Copiar DLL a la solución
+        shell: pwsh
+        run: |
+          $dll  = Get-ChildItem plugins/Axz.Plugins/bin/Release -Recurse -Filter Axz.Plugins.dll | Select-Object -First 1
+          $dest = Get-ChildItem solutions/$env:SOLUTION_NAME/src/PluginAssemblies -Recurse -Filter Axz.Plugins.dll -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($dest) { Copy-Item $dll.FullName $dest.FullName -Force } else { Write-Host "Aún no hay ensamblado registrado en la solución" }
+
+      - uses: microsoft/powerplatform-actions/actions-install@v1
+
+      - name: Empaquetar managed
+        uses: microsoft/powerplatform-actions/pack-solution@v1
+        with:
+          solution-folder: solutions/${{ env.SOLUTION_NAME }}/src
+          solution-file: out/${{ env.SOLUTION_NAME }}.zip
+          solution-type: Managed
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: solution
+          path: out/${{ env.SOLUTION_NAME }}.zip
+
+  deploy-qa:
+    needs: build
+    runs-on: windows-latest
+    environment: qa
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: solution
+          path: out
+      - uses: microsoft/powerplatform-actions/actions-install@v1
+      - name: Importar en QA
+        uses: microsoft/powerplatform-actions/import-solution@v1
+        with:
+          environment-url: ${{ secrets.ENV_URL }}
+          app-id: ${{ secrets.CLIENT_ID }}
+          client-secret: ${{ secrets.CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          solution-file: out/${{ env.SOLUTION_NAME }}.zip
+          use-deployment-settings-file: true
+          deployment-settings-file: config/qa.json
+          force-overwrite: true
+          publish-changes: true
+
+  deploy-prod:
+    needs: deploy-qa
+    runs-on: windows-latest
+    environment: prod   # reviewers requeridos configurados en GitHub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: solution
+          path: out
+      - uses: microsoft/powerplatform-actions/actions-install@v1
+      - name: Importar en PROD
+        uses: microsoft/powerplatform-actions/import-solution@v1
+        with:
+          environment-url: ${{ secrets.ENV_URL }}
+          app-id: ${{ secrets.CLIENT_ID }}
+          client-secret: ${{ secrets.CLIENT_SECRET }}
+          tenant-id: ${{ secrets.TENANT_ID }}
+          solution-file: out/${{ env.SOLUTION_NAME }}.zip
+          use-deployment-settings-file: true
+          deployment-settings-file: config/prod.json
+          force-overwrite: true
+          publish-changes: true
