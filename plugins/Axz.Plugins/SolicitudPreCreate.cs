@@ -17,13 +17,8 @@ namespace Axz.Plugins
             var trace = (ITracingService)serviceProvider.GetService(typeof(ITracingService));
 
             var target = context.InputParameters["Target"] as Entity;
-            if (target == null || context.Depth > 1) return;
-
-            if (!target.Contains("axz_correlationid"))
-                target["axz_correlationid"] = Guid.NewGuid().ToString();
-
-            target["axz_estado"] = new OptionSetValue(EstadoPendiente);
-            trace.Trace("Solicitud inicializada: {0}", target["axz_correlationid"]);
+            
+            target.Attributes["axz_nombre"] = target.Attributes["axz_nombre"] + DateTime.Now.ToString();
         }
     }
 }
